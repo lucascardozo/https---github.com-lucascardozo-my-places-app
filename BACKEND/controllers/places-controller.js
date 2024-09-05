@@ -1,103 +1,142 @@
 const { v4: uuidv4 } = require('uuid');
+const {validationResult} = require('express-validator');
 const HttpError = require("../models/http-error");
+const getCoordsForAddress = require('../util/location');
+const Place = require('../models/places');
 
-const DUMMY_PLACES = [
-    {
-        id:'p1',
-        title:'Calgary',
-        description:'Calgary, uma cidade cosmopolita em Alberta com vários arranha-céus, deve seu rápido crescimento à condição de centro da indústria de petróleo do Canadá. No entanto, ela ainda está mergulhada na cultura western, que lhe valeu o apelido de "Cidade da vaca", evidente no Calgary Stampede, um grande festival de rodeio realizado em julho e que teve origem nas exposições agropecuárias organizadas no passado. ',
-        imageUrl:'https://www.pictureperfectcleaning.ca/wp-content/uploads/2020/08/Calgary-aerial-pan-from-N.jpg',
-        address:'Alberta',
-        location:{
-            lat:51.0271596,
-            lng:-114.4174685
-        },
-        creator:'12'
-    },
-    {
-        id:'p2',
-        title:'Edmonton',
-        description:'Calgary, uma cidade cosmopolita em Alberta com vários arranha-céus, deve seu rápido crescimento à condição de centro da indústria de petróleo do Canadá. No entanto, ela ainda está mergulhada na cultura western, que lhe valeu o apelido de "Cidade da vaca", evidente no Calgary Stampede, um grande festival de rodeio realizado em julho e que teve origem nas exposições agropecuárias organizadas no passado. ',
-        imageUrl:'https://www.pictureperfectcleaning.ca/wp-content/uploads/2020/08/Calgary-aerial-pan-from-N.jpg',
-        address:'Alberta',
-        location:{
-            lat:51.0271596,
-            lng:-114.4174685
-        },
-        creator:'12'
-    }
-];
-
-const getPlaceById = (req,res,next) => {
+const getPlaceById = async (req,res,next) => {
 
     const placeId = req.params.placeId;
 
-    const place = DUMMY_PLACES.find(p => {
-        return p.id === placeId
-    });
+    let place;
+
+    try {
+        place = await Place.findById(placeId);
+    } catch (err) {
+        const error = new HttpError("Something went wrong, could not find a place!",500);
+        return next(error);
+    }
 
     if(!place){
-        throw new HttpError('Could not find a place for de provide id.',404);
-    }  
+        const error = new HttpError('Could not find a place for de provide id.',404);
+        return next(error);
+    } 
 
-    res.json({place});
+    res.json({place: place.toObject({ getters: true})});
 
 };
 
-const getPlacesByUser = (req,res,next)=>{
+const getPlacesByUser = async (req,res,next)=>{
 
     const userId = req.params.userId;
 
-    const place = DUMMY_PLACES.find(p => {
-        return p.creator === userId
-    });
+    let places;
 
-    if(!place){
-        return next(new HttpError('Could not find a place for de provide user id.',404)); 
-    }  
+    try {
+        places = await Place.find({ creator:userId });
+    } catch (err) {
+        const error = new HttpError("Something went wrong, could not find some place!",500);
+        return next(error);
+    }
 
-    res.json({place});
+    if(!places || places.length === 0){
+        return next(new HttpError('Could not find places for de provide user id.',404)); 
+    } 
 
+    res.json({places: places.map(place => place.toObject({ getters: true}))});
 };
 
-const createPlace = (req,res,next) =>{
-    const { title,description,location, address, creator } = req.body;
+const createPlace = async (req,res,next) =>{
 
-    const createPlace = {
-        id:uuidv4(),
+    const errors = validationResult(req);
+
+    if(!errors.isEmpty()){
+       return next(new HttpError('Invalid inputs passed, please check your data.',422)); 
+    }
+    
+    const { title,description, address, creator } = req.body;
+
+    let coordinates;
+    try {
+        coordinates = await getCoordsForAddress(address);
+    } catch (error) {
+        return next(error);
+    }
+
+    const createPlace = new Place({
         title:title,
         description:description,
-        location, location,
+        location: coordinates,
         address:address,
+        image:'https://www.pictureperfectcleaning.ca/wp-content/uploads/2020/08/Calgary-aerial-pan-from-N.jpg',
         creator:creator
-    };
+    });
 
-    DUMMY_PLACES.push(createPlace);
+    try{
+        await createPlace.save();
+    }catch(err){
+        console.log(err);
+        const error = new HttpError("Create a place failed, please try again!",500);
+        return next(error);
+    }
 
     res.status(201).json({place:createPlace});
 }
 
-const updatePlace = (req,res,next) =>{
+const updatePlace = async (req,res,next) =>{
 
+    const errors = validationResult(req);
+
+    if(!errors.isEmpty()){
+        return next(new HttpError('Invalid inputs passed, please check your data.',422)); 
+    }
+    
     const { title,description, address } = req.body;
 
     const placeId = req.params.placeId;
 
-    const updatePlace = {...DUMMY_PLACES.find(p => p.id === placeId)};
+    let place;
 
-    const placeIndex = DUMMY_PLACES.findIndex(p => p.id === placeId);
+    try {
+        place = await Place.findById(placeId);
+    } catch (err) {
+        const error = new HttpError("Something went wrong, could not update the record!",500);
+        return next(error);
+    }
 
-    updatePlace.title = title;
-    updatePlace.description = description;
-    updatePlace.address = address;
+    place.title = title;
+    place.description = description;
+    place.address = address;
 
-    DUMMY_PLACES[placeIndex] = updatePlace;
+    try {
+        await place.save();
+    } catch (error) {
+        const errorSave = new HttpError("Something went wrong, could not update the record!",500);
+        return next(errorSave);
+    }
 
-    res.status(200).json({place:updatePlace});
+    res.status(200).json({place:place.toObject({ getters:true})});
 }
 
-const deletePlace = (req,res,next) =>{
-    
+const deletePlace = async (req,res,next) =>{
+
+    const placeId = req.params.placeId;
+
+    let place;
+
+    try {
+        place = await Place.findByIdAndDelete(placeId);
+    } catch (err) {
+        const error = new HttpError("Something went wrong, could not delete the place!",500)
+        return next(error);
+    }
+
+    if(!place){
+        const error = new HttpError("Could not find the place "+placeId,500)
+        return next(error);
+    }
+
+    res.status(200).json({ message: 'Deleted place '+placeId+'.'});
 }
 
 exports.getPlaceById = getPlaceById;
