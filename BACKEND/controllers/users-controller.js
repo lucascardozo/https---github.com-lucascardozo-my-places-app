@@ -25,7 +25,7 @@ const signup = async (req,res,next) =>{
         return next(new HttpError('Invalid inputs passed, please check your data.',422)); 
     }
 
-    const { name, email, password,places} = req.body;
+    const { name, email, password} = req.body;
 
     const existingUser = await User.findOne({ email:email});
 
@@ -39,7 +39,7 @@ const signup = async (req,res,next) =>{
         email:email,
         password: password,
         image:"https://w7.pngwing.com/pngs/81/570/png-transparent-profile-logo-computer-icons-user-user-blue-heroes-logo-thumbnail.png",
-        places:places
+        places:[]
     });
 
     try {
