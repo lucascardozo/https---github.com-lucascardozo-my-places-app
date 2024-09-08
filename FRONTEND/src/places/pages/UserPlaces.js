@@ -1,41 +1,36 @@
-import React from "react";
+import React,{useEffect, useState} from "react";
 import { useParams } from "react-router-dom";
-
+import { useHttpClient } from '../../shared/hooks/http-hook';
+import ErrorModal from '../../shared/components/UIElements/ErrorModal';
+import LoadingSpinner from '../../shared/components/UIElements/LoadingSpinner';
 import PlaceList from '../components/PlaceList';
-
-const DUMMY_PLACES = [
-    {
-        id:'p1',
-        title:'Calgary',
-        description:'Calgary, uma cidade cosmopolita em Alberta com vários arranha-céus, deve seu rápido crescimento à condição de centro da indústria de petróleo do Canadá. No entanto, ela ainda está mergulhada na cultura western, que lhe valeu o apelido de "Cidade da vaca", evidente no Calgary Stampede, um grande festival de rodeio realizado em julho e que teve origem nas exposições agropecuárias organizadas no passado. ',
-        imageUrl:'https://www.pictureperfectcleaning.ca/wp-content/uploads/2020/08/Calgary-aerial-pan-from-N.jpg',
-        address:'Alberta',
-        location:{
-            lat:51.0271596,
-            lng:-114.4174685
-        },
-        creator:'12'
-    },
-    {
-        id:'p2',
-        title:'Edmonton',
-        description:'Calgary, uma cidade cosmopolita em Alberta com vários arranha-céus, deve seu rápido crescimento à condição de centro da indústria de petróleo do Canadá. No entanto, ela ainda está mergulhada na cultura western, que lhe valeu o apelido de "Cidade da vaca", evidente no Calgary Stampede, um grande festival de rodeio realizado em julho e que teve origem nas exposições agropecuárias organizadas no passado. ',
-        imageUrl:'https://www.pictureperfectcleaning.ca/wp-content/uploads/2020/08/Calgary-aerial-pan-from-N.jpg',
-        address:'Alberta',
-        location:{
-            lat:51.0271596,
-            lng:-114.4174685
-        },
-        creator:'12'
-    }
-];
 
 const UserPlaces = () => {
 
-    const userId = useParams().userId;
-    const loaderPlaces = DUMMY_PLACES.filter( place => place.creator === userId);
+    const [loadedPlaces, setLoadedPlaces] = useState();
+    const {isLoading, error ,sendRequest, clearError} = useHttpClient();
 
-    return <PlaceList items={loaderPlaces}></PlaceList>;
+    const userId = useParams().userId;
+
+    useEffect(()=>{
+        const fetchPlaces = async () => {
+            try {
+                const response = await sendRequest(
+                    `http://localhost:5000/api/places/user/${userId}`
+                );
+                setLoadedPlaces(response.places);
+            } catch (error) {}
+        };
+        fetchPlaces();
+    },[sendRequest,userId]);
+
+    return  <React.Fragment>
+                <ErrorModal error={error} onClear={clearError} />
+                { isLoading && <div className="center">
+                    <LoadingSpinner />
+                    </div>}
+                {!isLoading && loadedPlaces && <PlaceList items={loadedPlaces}></PlaceList>}
+            </React.Fragment>
 }
 
 export default UserPlaces;

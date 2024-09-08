@@ -69,7 +69,7 @@ const login = async (req,res,next) =>{
         return next(new HttpError('Could not identify user, please try again!',401));
     }  
 
-    res.json({message:'Logged in!'});
+    res.json({message:'Logged in!', user: identifiedUser.toObject({ getters: true})});
 };
 
 exports.getUsers = getUsers;
