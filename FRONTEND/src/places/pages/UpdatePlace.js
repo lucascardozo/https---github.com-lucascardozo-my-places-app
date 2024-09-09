@@ -1,44 +1,25 @@
-import React, {useEffect,useState} from 'react';
-import { useParams } from 'react-router-dom';
+import React, {useEffect,useState,useContext} from 'react';
+import { useParams, useHistory } from 'react-router-dom';
 import Input from '../../shared/components/FormElements/Input';
 import Button from '../../shared/components/FormElements/Button';
 import Card from '../../shared/components/UIElements/Card';
 import {VALIDATOR_MINLENGTH, VALIDATOR_REQUIRE} from "../../shared/util/validators";
 import { useForm } from '../../shared/hooks/form-hook';
+import { useHttpClient } from '../../shared/hooks/http-hook';
+import ErrorModal from '../../shared/components/UIElements/ErrorModal';
+import LoadingSpinner from '../../shared/components/UIElements/LoadingSpinner';
+import { AuthContext } from '../../shared/context/auth-context';
 import './PlaceForm.css';
-
-const DUMMY_PLACES = [
-    {
-        id:'p1',
-        title:'Calgary',
-        description:'Calgary, uma cidade cosmopolita em Alberta com vários arranha-céus, deve seu rápido crescimento à condição de centro da indústria de petróleo do Canadá. No entanto, ela ainda está mergulhada na cultura western, que lhe valeu o apelido de "Cidade da vaca", evidente no Calgary Stampede, um grande festival de rodeio realizado em julho e que teve origem nas exposições agropecuárias organizadas no passado. ',
-        imageUrl:'https://www.pictureperfectcleaning.ca/wp-content/uploads/2020/08/Calgary-aerial-pan-from-N.jpg',
-        address:'Alberta',
-        location:{
-            lat:51.0271596,
-            lng:-114.4174685
-        },
-        creator:'12'
-    },
-    {
-        id:'p2',
-        title:'Edmonton',
-        description:'Calgary, uma cidade cosmopolita em Alberta com vários arranha-céus, deve seu rápido crescimento à condição de centro da indústria de petróleo do Canadá. No entanto, ela ainda está mergulhada na cultura western, que lhe valeu o apelido de "Cidade da vaca", evidente no Calgary Stampede, um grande festival de rodeio realizado em julho e que teve origem nas exposições agropecuárias organizadas no passado. ',
-        imageUrl:'https://www.pictureperfectcleaning.ca/wp-content/uploads/2020/08/Calgary-aerial-pan-from-N.jpg',
-        address:'Alberta',
-        location:{
-            lat:51.0271596,
-            lng:-114.4174685
-        },
-        creator:'12'
-    }
-];
 
 const UpdatePlace = () => {
 
-    const [isLoading, setIsLoading] = useState(true);
+    const auth = useContext(AuthContext);
 
+    const {isLoading, error ,sendRequest, clearError} = useHttpClient();
+    const [loadedPlaces, setLoadedPlaces] = useState();
     const placeId = useParams().placeId;
+
+    const history = useHistory();
 
     const [formState, inputHandler, setFormData] = useForm({
         title:{
@@ -55,39 +36,63 @@ const UpdatePlace = () => {
         },
     },false);
 
-    const identifiedPlace = DUMMY_PLACES.find(p => p.id === placeId);
+    useEffect(()=>{
+        const fetchPlace = async () => {
+            try {
+                const responseData = await sendRequest(
+                    `http://localhost:5000/api/places/${placeId}`
+                );
+                setLoadedPlaces(responseData.place);
+                setFormData({
+                    title:{
+                        value:responseData.place.title,
+                        isValid:true
+                    },
+                    description:{
+                        value:responseData.place.description,
+                        isValid:true
+                    },
+                    address:{
+                        value:responseData.place.address,
+                        isValid:true
+                    }
+                }, true);
+            } catch (error) {}
+        };
+        fetchPlace();
 
-    useEffect(() => {
+    },[sendRequest,placeId,setFormData]);
 
-        if(identifiedPlace){
-
-            setFormData({
-                title:{
-                    value:identifiedPlace.title,
-                    isValid:true
-                },
-                description:{
-                    value:identifiedPlace.description,
-                    isValid:true
-                },
-                address:{
-                    value:identifiedPlace.address,
-                    isValid:true
-                }
-            }, true);
-        }
-
-        setIsLoading(false);
-
-    }, [setFormData, identifiedPlace]);
-
-    const placeSubmitHandler = event =>{
+    const placeSubmitHandler = async event =>{
         event.preventDefault();
 
-        console.log(formState.inputs);
+        try {
+            await sendRequest(
+                `http://localhost:5000/api/places/${placeId}`,
+                'PATCH',
+                JSON.stringify({    
+                    title: formState.inputs.title.value,
+                    description: formState.inputs.description.value,
+                    address: formState.inputs.address.value
+                }),
+                {'Content-Type':'application/json'}
+            );
+
+            history.push('/'+auth.userId+'/places');
+
+        } catch (error) {}
+
     };
 
-    if(!identifiedPlace){
+    if(isLoading){
+        return (
+            <div className='center'>
+                <LoadingSpinner />
+            </div>
+            );
+    }
+
+    if(!loadedPlaces && !error){
         return (
             <div className='center'>
                 <Card>
@@ -97,15 +102,9 @@ const UpdatePlace = () => {
             );
     }
 
-    if(isLoading){
-        return (
-            <div className='center'>
-                <h2>Loading...</h2>
-            </div>
-            );
-    }
-
-    return <form className="place-form" onSubmit={placeSubmitHandler}>
+    return <React.Fragment>
+        <ErrorModal error={error} onClear={clearError} />
+        {!isLoading && loadedPlaces && (<form className="place-form" onSubmit={placeSubmitHandler}>
         <Input 
             id="title"
             element="input" 
@@ -114,8 +113,8 @@ const UpdatePlace = () => {
             validators={[VALIDATOR_REQUIRE()]}
             errorText="Please enter a valid title"
             onInput={inputHandler}
-            initialValue={formState.inputs.title.value}
-            initialValid={formState.inputs.title.isValid} />
+            initialValue={loadedPlaces.title}
+            initialValid={true} />
         <Input
             id="description" 
             element="textarea" 
@@ -123,8 +122,8 @@ const UpdatePlace = () => {
             validators={[VALIDATOR_MINLENGTH(10)]}
             errorText="Please enter a valid description"
             onInput={inputHandler}
-            initialValue={formState.inputs.description.value}
-            initialValid={formState.inputs.description.isValid} />
+            initialValue={loadedPlaces.description}
+            initialValid={true} />
 
         <Input
             id="address" 
@@ -133,13 +132,14 @@ const UpdatePlace = () => {
             validators={[VALIDATOR_REQUIRE()]}
             errorText="Please enter a valid address"
             onInput={inputHandler}
-            initialValue={formState.inputs.address.value}
-            initialValid={formState.inputs.address.isValid} />
+            initialValue={loadedPlaces.address}
+            initialValid={true} />
 
         <Button type="submit" disabled={!formState.isValid} >
             EDIT PLACE
         </Button>
-    </form>
+    </form>)}
+    </React.Fragment>
 };
 
 export default UpdatePlace;
