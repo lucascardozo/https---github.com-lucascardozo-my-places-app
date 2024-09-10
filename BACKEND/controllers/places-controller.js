@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
 const {validationResult} = require('express-validator');
 const HttpError = require("../models/http-error");
 const getCoordsForAddress = require('../util/location');
@@ -70,7 +71,7 @@ const createPlace = async (req,res,next) =>{
         description:description,
         location: coordinates,
         address:address,
-        image:'https://www.pictureperfectcleaning.ca/wp-content/uploads/2020/08/Calgary-aerial-pan-from-N.jpg',
+        image: req.file.path,
         creator:creator
     });
 
@@ -127,15 +128,32 @@ const updatePlace = async (req,res,next) =>{
         return next(error);
     }
 
+    const oldImagePath = place.image;
+
+    let newImagePath = oldImagePath;
+
+    if (req.file && req.file.path) {
+        newImagePath = req.file.path;
+    }
+
     place.title = title;
     place.description = description;
     place.address = address;
-
+    place.image = newImagePath;
+    
     try {
         await place.save();
     } catch (error) {
         const errorSave = new HttpError("Something went wrong, could not update the record!",500);
         return next(errorSave);
+    }
+
+    if (newImagePath !== oldImagePath && oldImagePath) {
+        fs.unlink(oldImagePath, err => {
+            if (err) {
+                console.error('Error deleting old image:', err);
+            }
+        });
     }
 
     res.status(200).json({place:place.toObject({ getters:true})});
@@ -159,6 +177,8 @@ const deletePlace = async (req,res,next) =>{
         return next(error);
     }
 
+    const imagePath = place.image;
+
     try{
         
         const session = await mongoose.startSession();
@@ -173,6 +193,10 @@ const deletePlace = async (req,res,next) =>{
         const error = new HttpError("Something went wrong, could not delete the place!",500);
         return next(error);
     }
+
+    fs.unlink(imagePath, err => {
+        console.log(err);
+    });
 
     res.status(200).json({ message: 'Deleted place '+placeId+'.'});
 }

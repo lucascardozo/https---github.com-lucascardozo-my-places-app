@@ -1,4 +1,5 @@
 // Imports
+const fs = require('fs');
 const express = require('express');
 const bodyParser = require('body-parser');
 const HttpError = require("./models/http-error");
@@ -12,6 +13,9 @@ const app = express();
 
 // Middleware
 app.use(bodyParser.json());
+
+// for allow the folder upload/images
+app.use("/uploads/images", express.static(`${process.cwd()}/uploads/images`));
 
 // Middleware to CORS
 app.use((req,res,next)=>{
@@ -35,6 +39,11 @@ app.use((req,res,next) => {
 
 // Middleware error
 app.use((error,req,res,next) => {
+    if(req.file){
+      fs.unlink(req.file.path, (err) => {
+        console.log(err);
+      });
+    }
     if(res.headerSent){
         return next(error);
     }

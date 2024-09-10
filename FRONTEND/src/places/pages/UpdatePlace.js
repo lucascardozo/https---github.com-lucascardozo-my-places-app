@@ -9,6 +9,7 @@ import { useHttpClient } from '../../shared/hooks/http-hook';
 import ErrorModal from '../../shared/components/UIElements/ErrorModal';
 import LoadingSpinner from '../../shared/components/UIElements/LoadingSpinner';
 import { AuthContext } from '../../shared/context/auth-context';
+import ImageUpload from '../../shared/components/FormElements/ImageUpload';
 import './PlaceForm.css';
 
 const UpdatePlace = () => {
@@ -34,6 +35,10 @@ const UpdatePlace = () => {
             value:'',
             isValid:false
         },
+        image:{
+            value:null,
+            isValid:false
+        }
     },false);
 
     useEffect(()=>{
@@ -55,8 +60,13 @@ const UpdatePlace = () => {
                     address:{
                         value:responseData.place.address,
                         isValid:true
+                    },
+                    image:{
+                        value:responseData.place.image,
+                        isValid:true
                     }
                 }, true);
+
             } catch (error) {}
         };
         fetchPlace();
@@ -67,15 +77,17 @@ const UpdatePlace = () => {
         event.preventDefault();
 
         try {
+
+            const formData = new FormData();
+            formData.append('title',formState.inputs.title.value);
+            formData.append('description',formState.inputs.description.value);
+            formData.append('address',formState.inputs.address.value);
+            formData.append('image',formState.inputs.image.value);
+
             await sendRequest(
                 `http://localhost:5000/api/places/${placeId}`,
                 'PATCH',
-                JSON.stringify({    
-                    title: formState.inputs.title.value,
-                    description: formState.inputs.description.value,
-                    address: formState.inputs.address.value
-                }),
-                {'Content-Type':'application/json'}
+                formData
             );
 
             history.push('/'+auth.userId+'/places');
@@ -134,6 +146,8 @@ const UpdatePlace = () => {
             onInput={inputHandler}
             initialValue={loadedPlaces.address}
             initialValid={true} />
+
+        <ImageUpload center id="image" onInput={inputHandler} errorText="Please provide an image." />
 
         <Button type="submit" disabled={!formState.isValid} >
             EDIT PLACE

@@ -7,8 +7,7 @@ async function getCoordsForAddress(address){
     try {
         const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${API_KEY}`);
         const data = response.data;
-
-        // Log para depuração
+        
         console.log('API Response:', data);
 
         if (!data || data.status === 'ZERO_RESULTS') {
@@ -29,8 +28,8 @@ async function getCoordsForAddress(address){
         }
 
         return coordinates;
+
     } catch (error) {
-        // Log do erro para ajudar na depuração
         console.error('Error fetching coordinates:', error.message);
         throw error;
     }
